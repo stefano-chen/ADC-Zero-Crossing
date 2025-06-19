@@ -176,7 +176,7 @@ void vFrequencyEstimationTask(void *pvParameters){
 		for(int i=1; i<NUM_SAMPLES; i++){
 			unsigned long int prev = processing_buffer[i-1];
 			unsigned long int curr = processing_buffer[i];
-			if ((prev < logical_zero && curr > logical_zero) || (prev > logical_zero && curr < logical_zero)){
+			if ((prev < logical_zero && curr >= logical_zero) || (prev > logical_zero && curr <= logical_zero)){
 				zero_crossing++;
 			}
 		}
