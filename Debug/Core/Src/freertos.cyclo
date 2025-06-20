@@ -1,6 +1,0 @@
-../Core/Src/freertos.c:134:6:vCopyBuffer	2
-../Core/Src/freertos.c:141:6:vADC_Acquire	2
-../Core/Src/freertos.c:157:6:vFrequencyEstimationTask	6
-../Core/Src/freertos.c:196:6:vSerialPrintTask	1
-../Core/Src/freertos.c:226:6:MX_FREERTOS_Init	4
-../Core/Src/freertos.c:278:6:StartDefaultTask	1
