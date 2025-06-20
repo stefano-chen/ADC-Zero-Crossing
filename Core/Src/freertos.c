@@ -163,7 +163,6 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
 	xTimer = osTimerNew(vADC_Acquire, osTimerPeriodic, NULL, NULL);
-
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -182,7 +181,6 @@ void MX_FREERTOS_Init(void) {
 	  osThreadNew(vFrequencyEstimationTask, NULL, &frequencyEstimationTask_attribute);
 	  osThreadNew(vSerialPrintTask, NULL, &serialPrintTask_attribute);
   }
-
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
