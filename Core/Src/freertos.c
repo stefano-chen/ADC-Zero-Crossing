@@ -115,6 +115,31 @@ const osThreadAttr_t serialPrintTask_attribute = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal2,
 };
+
+// Uncomment the following define statement to enable TESTMODE
+//#define TESTMODE
+
+#ifdef TESTMODE
+
+#define PI 3.14159265359
+
+#define	SIN_FREQUENCY_HZ 143.67
+
+#define PHASE 0
+
+uint32_t n = 0;
+
+uint32_t generateTestSinSignal(){
+	float value = sin(2.0 * PI * ((float)SIN_FREQUENCY_HZ) * ((float)n) *(1.0/((float)SAMPLING_FREQUENCY_HZ)) + ((float)PHASE));
+	// scaled to the interval [0, 1]
+	double scaledValue = (value + 1.0)/2.0;
+	n++;
+	// return values from the interval [0, 65536]
+	return (uint32_t)(65536 * scaledValue);
+}
+
+#endif
+
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -219,9 +244,13 @@ void vCopyBuffer(){
 // The Timer Callback function
 void vADC_Acquire(){
 	uint32_t value = 0;
+#ifdef TESTMODE
+	value = generateTestSinSignal();
+#else
 	HAL_ADC_Start(&hadc1);
 	HAL_ADC_PollForConversion(&hadc1, 0);
 	value = HAL_ADC_GetValue(&hadc1);
+#endif
 	adc_buffer[current_sample_n] = value;
 	current_sample_n++;
 	if(current_sample_n == NUM_SAMPLES){
@@ -236,7 +265,7 @@ void vFrequencyEstimationTask(void *pvParameters){
 	//The ADC use 16bits (0V->0  3.3V->65536)
 	unsigned long int logical_zero = 32768; // =(2^16)/2  indicates the logical zero (in this case 1.65V)
 	// Represent the duration in seconds of the sampling process
-	float sampling_period = (float)NUM_SAMPLES / SAMPLING_FREQUENCY_HZ;
+	float sampling_period = (float)NUM_SAMPLES / (float)SAMPLING_FREQUENCY_HZ;
 	float frequency;
 
 	while(1){
