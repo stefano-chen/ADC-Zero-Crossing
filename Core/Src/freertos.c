@@ -117,18 +117,13 @@ const osThreadAttr_t serialPrintTask_attribute = {
 };
 
 // Uncomment the following define statement to enable TESTMODE
+// In TESTMODE vADC_Acquire function will generate synthetic samples instead of reading from the ADC
 //#define TESTMODE
-
 #ifdef TESTMODE
-
 #define PI 3.14159265359
-
 #define	SIN_FREQUENCY_HZ 143.67
-
 #define PHASE 0
-
 uint32_t n = 0;
-
 uint32_t generateTestSinSignal(){
 	float value = sin(2.0 * PI * ((float)SIN_FREQUENCY_HZ) * ((float)n) *(1.0/((float)SAMPLING_FREQUENCY_HZ)) + ((float)PHASE));
 	// scaled to the interval [0, 1]
@@ -137,7 +132,6 @@ uint32_t generateTestSinSignal(){
 	// return values from the interval [0, 65536]
 	return (uint32_t)(65536 * scaledValue);
 }
-
 #endif
 
 /* USER CODE END Variables */
@@ -245,8 +239,10 @@ void vCopyBuffer(){
 void vADC_Acquire(){
 	uint32_t value = 0;
 #ifdef TESTMODE
+	// Generate synthetic sinusoidal samples
 	value = generateTestSinSignal();
 #else
+	// Read value from ADC
 	HAL_ADC_Start(&hadc1);
 	HAL_ADC_PollForConversion(&hadc1, 0);
 	value = HAL_ADC_GetValue(&hadc1);
