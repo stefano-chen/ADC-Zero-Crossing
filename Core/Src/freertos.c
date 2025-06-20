@@ -85,22 +85,18 @@ typedef struct {
 
 // Number of samples required for the frequency estimation
 #define NUM_SAMPLES 500
-
 // The frequency used to sample the input signal
-#define SAMPLING_FREQUENCY_HZ 100
-
+#define SAMPLING_FREQUENCY_HZ 1000
+// Queue Length
 #define SERIAL_QUEUE_MAX_MSG 10
 
 uint32_t adc_buffer[NUM_SAMPLES];
-
-volatile int current_sample_n = 0;
-
 uint32_t processing_buffer[NUM_SAMPLES];
+volatile int current_sample_n = 0;
 
 // Sampling Timer
 osTimerId_t xTimer;
 osStatus_t xTimerStatus;
-
 
 osSemaphoreId_t xProcessingSemaphore;
 
@@ -131,86 +127,13 @@ const osThreadAttr_t defaultTask_attributes = {
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
 
-void vCopyBuffer(){
-	for(int i=0; i < NUM_SAMPLES; i++){
-		processing_buffer[i] = adc_buffer[i];
-	}
-}
+void vCopyBuffer();
 
-// The Timer Callback function
-void vADC_Acquire(){
-	uint32_t value = 0;
-	HAL_ADC_Start(&hadc1);
-	HAL_ADC_PollForConversion(&hadc1, 0);
-	value = HAL_ADC_GetValue(&hadc1);
-	adc_buffer[current_sample_n] = value;
+void vADC_Acquire();
 
-	current_sample_n++;
+void vFrequencyEstimationTask(void *pvParameters);
 
-	if(current_sample_n == NUM_SAMPLES){
-		current_sample_n = 0;
-		osSemaphoreRelease(xProcessingSemaphore);
-	}
-}
-
-
-void vFrequencyEstimationTask(void *pvParameters){
-
-	unsigned long int iteractions = 0;
-	unsigned long int zero_crossing;
-
-	//The ADC use 16bits (0V->0  3.3V->65536)
-	unsigned long int logical_zero = 32768; // =(2^16)/2  indicates the logical zero (1.65V)
-
-	// Represent the duration in seconds of the sampling process
-	float sampling_period = (float)NUM_SAMPLES / SAMPLING_FREQUENCY_HZ;
-
-	float frequency;
-
-	while(1){
-		osSemaphoreAcquire(xProcessingSemaphore, osWaitForever);
-		vCopyBuffer();
-		zero_crossing = 0;
-
-		// calculate the number of times the signal pass through the logical zero
-		for(int i=1; i<NUM_SAMPLES; i++){
-			unsigned long int prev = processing_buffer[i-1];
-			unsigned long int curr = processing_buffer[i];
-			if ((prev < logical_zero && curr >= logical_zero) || (prev > logical_zero && curr <= logical_zero)){
-				zero_crossing++;
-			}
-		}
-
-		// A sinusoidal wave cycle has 2 zero crossing
-		// The frequency is define as the number of cycles (number of zero crossing / 2) divided by the period
-		frequency = ((float)zero_crossing/2.0) / sampling_period;
-
-		xMessage msg = {.iter = iteractions, .freq = frequency};
-
-		iteractions++;
-
-		osMessageQueuePut(xSerialQueue, &msg, 0, 0);
-	}
-}
-
-void vSerialPrintTask(void *pvParameters){
-
-	xMessage msg;
-
-	unsigned long int lowBound = 0;
-
-	unsigned long int upperBound = NUM_SAMPLES;
-
-	while(1){
-		osMessageQueueGet(xSerialQueue, &msg, 0, osWaitForever);
-
-		lowBound = msg.iter * NUM_SAMPLES;
-
-		upperBound = lowBound + NUM_SAMPLES - 1;
-
-		printf("Samples [%lu - %lu] Estimated Frequency = %.2f Hz\r\n", lowBound, upperBound, msg.freq);
-	}
-}
+void vSerialPrintTask(void *pvParameters);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -288,6 +211,70 @@ void StartDefaultTask(void *argument)
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+
+void vCopyBuffer(){
+	for(int i=0; i < NUM_SAMPLES; i++){
+		processing_buffer[i] = adc_buffer[i];
+	}
+}
+
+// The Timer Callback function
+void vADC_Acquire(){
+	uint32_t value = 0;
+	HAL_ADC_Start(&hadc1);
+	HAL_ADC_PollForConversion(&hadc1, 0);
+	value = HAL_ADC_GetValue(&hadc1);
+	adc_buffer[current_sample_n] = value;
+	current_sample_n++;
+	if(current_sample_n == NUM_SAMPLES){
+		current_sample_n = 0;
+		osSemaphoreRelease(xProcessingSemaphore);
+	}
+}
+
+void vFrequencyEstimationTask(void *pvParameters){
+	unsigned long int iteractions = 0;
+	unsigned long int zero_crossing;
+	//The ADC use 16bits (0V->0  3.3V->65536)
+	unsigned long int logical_zero = 32768; // =(2^16)/2  indicates the logical zero (in this case 1.65V)
+	// Represent the duration in seconds of the sampling process
+	float sampling_period = (float)NUM_SAMPLES / SAMPLING_FREQUENCY_HZ;
+	float frequency;
+
+	while(1){
+		osSemaphoreAcquire(xProcessingSemaphore, osWaitForever);
+		vCopyBuffer();
+		// calculate the number of times the signal pass through the logical zero
+		zero_crossing = 0;
+		for(int i=1; i<NUM_SAMPLES; i++){
+			unsigned long int prev = processing_buffer[i-1];
+			unsigned long int curr = processing_buffer[i];
+			if ((prev < logical_zero && curr >= logical_zero) || (prev > logical_zero && curr <= logical_zero)){
+				zero_crossing++;
+			}
+		}
+		// A sinusoidal wave cycle has 2 zero crossing
+		// The frequency is define as the number of cycles divided by the period
+		// in the sinusoidal case each cycle has 2 zero crossing (raising zero and falling zero)
+		// so to find the number of cycles we need to divide the number of zero crossing by a factor 2
+		frequency = ((float)zero_crossing/2.0) / sampling_period;
+		xMessage msg = {.iter = iteractions, .freq = frequency};
+		iteractions++;
+		osMessageQueuePut(xSerialQueue, &msg, 0, 0);
+	}
+}
+
+void vSerialPrintTask(void *pvParameters){
+	xMessage msg;
+	unsigned long int lowBound;
+	unsigned long int upperBound;
+	while(1){
+		osMessageQueueGet(xSerialQueue, &msg, 0, osWaitForever);
+		lowBound = msg.iter * NUM_SAMPLES;
+		upperBound = lowBound + NUM_SAMPLES - 1;
+		printf("Samples [%lu - %lu] Estimated Frequency = %.2f Hz\r\n", lowBound, upperBound, msg.freq);
+	}
+}
 
 /* USER CODE END Application */
 
